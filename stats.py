@@ -1,40 +1,43 @@
 # stats.py
-
-class StatItem:
-    def __init__(self, name, category):
-        self.name = name
-        self.category = category # 'Dream' or 'Improvement'
-        self.value = 50 # Başlangıç değeri
+import random
 
 class StatsManager:
-    def __init__(self):
-        self.dreams = []       # Hücum gücünü etkiler
-        self.improvements = [] # Defans/Gücü etkiler
+    def __init__(self, position):
+        # 3 Ana Hayal
+        self.dreams = ["", "", ""] 
         
-    def add_dream(self, name):
-        """Hücum statı ekler"""
-        self.dreams.append(StatItem(name, 'Dream'))
+        # FUT KART STATLARI (60-70 arası başlar)
+        self.attributes = {
+            "SHT": random.randint(60, 70), 
+            "FIN": random.randint(60, 70), 
+            "DEF": random.randint(55, 65), 
+            "PAS": random.randint(60, 70), 
+            "REB": random.randint(50, 65), 
+            "MEN": random.randint(65, 75)  
+        }
         
-    def add_improvement(self, name):
-        """Defans/Gelişim statı ekler"""
-        self.improvements.append(StatItem(name, 'Improvement'))
+        self.apply_position_bonus(position)
 
-    def get_offense_power(self, level):
-        """
-        Hücum gücü hesaplama:
-        Temel 50 + (Hayal Sayısı * 2) + (Level * 2)
-        """
-        base = 50
-        dream_bonus = len(self.dreams) * 2
-        level_bonus = level * 2
-        return base + dream_bonus + level_bonus
+    def apply_position_bonus(self, pos):
+        if pos == "PG":
+            self.attributes["PAS"] += 10; self.attributes["SHT"] += 5
+        elif pos == "SG":
+            self.attributes["SHT"] += 10; self.attributes["FIN"] += 5
+        elif pos == "SF":
+            self.attributes["FIN"] += 8; self.attributes["DEF"] += 7
+        elif pos == "PF":
+            self.attributes["REB"] += 8; self.attributes["DEF"] += 7
+        elif pos == "C":
+            self.attributes["REB"] += 12; self.attributes["FIN"] += 5
+            self.attributes["SHT"] -= 5
 
-    def get_defense_power(self, level):
-        """
-        Defans gücü hesaplama:
-        Temel 50 + (Gelişim Hedefi Sayısı * 2) + (Level * 2)
-        """
-        base = 50
-        imp_bonus = len(self.improvements) * 2
-        level_bonus = level * 2
-        return base + imp_bonus + level_bonus
+    def get_overall(self):
+        return int(sum(self.attributes.values()) / 6)
+
+    def set_dreams(self, d1, d2, d3):
+        self.dreams = [d1, d2, d3]
+        
+    def upgrade_stat(self, stat_key, amount=1):
+        if stat_key in self.attributes:
+            self.attributes[stat_key] += amount
+            if self.attributes[stat_key] > 99: self.attributes[stat_key] = 99

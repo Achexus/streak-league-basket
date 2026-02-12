@@ -17,9 +17,9 @@ class AgendaItem:
 
 class TaskManager:
     def __init__(self):
-        self.habits = []      # Her gün sıfırlanır
-        self.daily_tasks = [] # Tek seferlik
-        self.agenda = []      # Takvim
+        self.habits = []      
+        self.daily_tasks = [] 
+        self.agenda = []      
         self.yesterday_score = 0
         
     def add_habit(self, name, diff):
@@ -41,34 +41,20 @@ class TaskManager:
             self.daily_tasks.pop(index)
 
     def calculate_daily_score(self):
-        """
-        Gün Sonu Sınavı:
-        Yapılanlar (+) Puan
-        Yapılmayanlar (-) Puan (Ceza)
-        """
         score = 0
-        
-        # Alışkanlıklar
         for h in self.habits:
             if h.done: score += h.xp
-            else: score -= h.xp # Ceza
-            
-        # Görevler
+            else: score -= h.xp
         for t in self.daily_tasks:
             if t.done: score += t.xp
-            else: score -= t.xp # Ceza
-            
+            else: score -= t.xp
         return score
 
     def reset_for_new_day(self):
-        """Günü bitirir, skoru kaydeder, tikleri kaldırır"""
         score = self.calculate_daily_score()
         self.yesterday_score = score
-        
-        # Sadece habitlerin tikini kaldır
         for h in self.habits:
             h.done = False
-            
         return score
 
     def check_agenda(self):
