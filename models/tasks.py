@@ -1,11 +1,10 @@
-# tasks.py
 from datetime import date
-from config import XP_VALUES
+from core.config import XP_VALUES
 
 class TaskItem:
     def __init__(self, task_name, difficulty, is_habit=False):
         self.task = task_name
-        self.diff = difficulty # E, M, H
+        self.diff = difficulty
         self.xp = XP_VALUES.get(difficulty, 10)
         self.done = False
         self.is_habit = is_habit
@@ -53,10 +52,7 @@ class TaskManager:
     def reset_for_new_day(self):
         score = self.calculate_daily_score()
         self.yesterday_score = score
+        # Habitleri sıfırla, Taskları sil (veya tut)
         for h in self.habits:
             h.done = False
         return score
-
-    def check_agenda(self):
-        today = date.today()
-        return [i.content for i in self.agenda if i.event_date.date() == today]

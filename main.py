@@ -1,149 +1,110 @@
-# main.py
 import time
+import sys
+import random
 from datetime import datetime, date
-from player import Player
-from league import League
-from tasks import AgendaItem
-import views
-import mechanics
-import controls # <--- YENİ EKLENDİ
+
+# --- MODÜLER İMPORTLAR ---
+from core import controls
+from models import Player
+from models.league import LeagueManager
+from systems import match_engine, loops  # loops eklendi
+import ui
 
 def create_game():
-    views.play_intro_animation()
-    views.clear_screen()
-    views.print_header()
+    ui.play_intro_animation()
+    ui.clear_screen()
+    ui.print_header()
     
-    name = views.get_safe_input("   Name: ", str) or "Pro Player"
-    number = views.get_safe_input("   Jersey #: ", str) or "10"
-    pos = views.select_position_view()
-    city_code = views.select_city_view()
+    print("📂 Loading World Database...")
+    try:
+        lm = LeagueManager()
+    except FileNotFoundError:
+        print(f"\n{ui.Style.RED}❌ ERROR: Season data missing!{ui.Style.END}")
+        print(f"   Please run 'python setup_season.py' first.")
+        sys.exit()
     
-    print("\n⚙️  BUILDING CAREER MODE...")
-    league = League(city_code)
     time.sleep(0.5)
+    ui.clear_screen()
+    ui.print_header()
+
+    name = ui.get_safe_input("   Name: ", str) or "Rookie"
+    number = ui.get_safe_input("   Jersey #: ", str) or "10"
+    pos = ui.select_position_view()
+    city_code = ui.select_city_view()
     
+    # Ligi Bul
+    target_league = lm.get_league(f"CITY_{city_code}")
+    if not target_league: target_league = lm.get_league("CITY_1")
+
+    print(f"\n⚙️  Scouting teams in {target_league.name}...")
+    time.sleep(1)
+    
+    # Oyuncu Oluştur
     player = Player(name, number, pos)
-    player.assign_team(league)
+    player.team_obj = random.choice(target_league.teams)
+    player.league_id = target_league.id
     
-    views.clear_screen()
-    views.print_header()
-    print("\n✨ DEFINE YOUR LEGACY (3 MAIN DREAMS) ✨")
-    print("For each dream, you must define at least 1 daily habit.\n")
+    ui.clear_screen()
+    ui.print_header()
+    print(f"\n✍️  CONTRACT SIGNED WITH {ui.Style.BOLD}{player.team_obj.name}{ui.Style.END}")
+    time.sleep(1)
     
-    dreams = []
+    # Hızlı Başlangıç İçin Hayalleri Otomatik Ata (İstersen input'a çevirebilirsin)
+    player.stats.set_dreams("MVP", "Champion", "Legend")
     
-    d1 = input("   1. MAIN DREAM (e.g. Buy a House): ") or "Become MVP"
-    t1 = input(f"      -> Linked Habit for '{d1}': ") or "Train Hard"
-    player.tasks.add_habit(t1, controls.DIFF_MEDIUM)
-    dreams.append(d1)
-    print("-" * 40)
-    
-    d2 = input("   2. MAIN DREAM: ") or "Win Championship"
-    t2 = input(f"      -> Linked Habit for '{d2}': ") or "Watch Film"
-    player.tasks.add_habit(t2, controls.DIFF_MEDIUM)
-    dreams.append(d2)
-    print("-" * 40)
-    
-    d3 = input("   3. MAIN DREAM: ") or "Be Rich"
-    t3 = input(f"      -> Linked Habit for '{d3}': ") or "Read Books"
-    player.tasks.add_habit(t3, controls.DIFF_MEDIUM)
-    dreams.append(d3)
-    
-    player.stats.set_dreams(dreams[0], dreams[1], dreams[2])
-    
-    print(f"\n✅ WELCOME TO {player.team_obj.name}!")
-    time.sleep(2)
-    return player, league
-
-def habits_loop(player):
-    while True:
-        views.habits_view(player)
-        c = views.get_safe_input(">> ", str).upper()
-        if c == controls.KEY_BACK: break
-        elif c == controls.KEY_ADD: 
-            n = input("Habit Name: ")
-            d = views.get_safe_input("Diff (E/M/H): ", str, valid_options=[controls.DIFF_EASY, controls.DIFF_MEDIUM, controls.DIFF_HARD])
-            player.tasks.add_habit(n, d)
-        elif c.isdigit(): player.tasks.toggle_habit(int(c)-1)
-
-def tasks_loop(player):
-    while True:
-        views.tasks_view(player)
-        c = views.get_safe_input(">> ", str).upper()
-        if c == controls.KEY_BACK: break
-        elif c == controls.KEY_ADD: 
-            n = input("Task Name: ")
-            d = views.get_safe_input("Diff (E/M/H): ", str, valid_options=[controls.DIFF_EASY, controls.DIFF_MEDIUM, controls.DIFF_HARD])
-            player.tasks.add_task(n, d)
-        elif c == controls.KEY_DELETE: 
-            idx = views.get_safe_input("Task #: ", int)
-            try: player.tasks.remove_task(idx-1)
-            except: pass
-        elif c == controls.KEY_IMPORT: player.import_agenda_to_task()
-        elif c.isdigit(): player.tasks.toggle_task(int(c)-1)
-
-def calendar_loop(player):
-    while True:
-        views.agenda_view(player)
-        c = views.get_safe_input(">> ", str).upper()
-        if c == controls.KEY_BACK: break
-        elif c == controls.KEY_NEW:
-            try:
-                day = views.get_safe_input("Day: ", int, min_val=1, max_val=31)
-                dt = datetime(date.today().year, date.today().month, day)
-                player.tasks.agenda.append(AgendaItem(dt, input("Note: ")))
-            except: pass
-
-def home_cycle(player):
-    while True:
-        views.home_hub_view(player)
-        c = views.get_safe_input(">> ", str).upper()
-        if c == controls.KEY_BACK: break
-        elif c == '1': habits_loop(player)
-        elif c == '2': tasks_loop(player)
-        elif c == '3': calendar_loop(player)
+    return player, lm
 
 def main():
-    player, league = create_game()
+    player, league_manager = create_game()
 
     while True:
-        views.main_menu_view(player)
-        choice = views.get_safe_input("Select >> ", str).upper()
+        # Oyuncunun ligini güncelle (Hafta ilerlemesi için önemli)
+        current_league = league_manager.get_league(player.league_id)
+        current_league.current_week = league_manager.current_week 
+
+        ui.main_menu_view(player, current_league)
+        choice = ui.get_safe_input("Select >> ", str).upper()
         
         if choice == controls.MENU_MATCH:
-            mechanics.play_match(player, league)
+            match_engine.play_match(player, league_manager)
             controls.wait_for_enter()
+            
         elif choice == controls.MENU_HOME:
-            home_cycle(player)
+            loops.home_cycle(player, current_league)
+            
+        elif choice == controls.MENU_EVENTS: 
+            loops.event_cycle(player)
+            
         elif choice == controls.MENU_PROFILE:
-            views.profile_view(player)
+            ui.profile_view(player)
+            
         elif choice == controls.MENU_LEAGUE:
             while True:
-                views.league_standings_view(league)
-                c = views.get_safe_input(">> ", str).upper()
+                ui.league_standings_view(current_league)
+                c = ui.get_safe_input(">> ", str).upper()
                 if c == controls.KEY_BACK: break
                 elif c == controls.KEY_PLAY:
-                    mechanics.play_match(player, league)
+                    match_engine.play_match(player, league_manager)
                     controls.wait_for_enter()
 
         elif choice == controls.MENU_END_DAY:
-            print("\n💤 Sleeping & Simulating...")
+            print("\n💤 Sleeping & Recovering...")
             time.sleep(1)
             score = player.tasks.reset_for_new_day()
+            messages = player.apply_daily_score(score)
             
-            event_msg = player.apply_daily_score(score)
+            print(f"\n📊 DAY RESULT: {score} XP Gained.")
+            try: print(f"📅 Date Advanced to: {player.get_date_str()}")
+            except: pass
             
-            print(f"📊 DAY RESULT: {score} XP.")
-            if event_msg:
-                print(f"\n📅 {views.Style.YELLOW}MONTHLY EVENT TRIGGERED!{views.Style.END}")
-                print(f"   {event_msg}")
-                controls.wait_for_enter()
-            
-            if score < 0: print("⚠️  Lost momentum.")
-            else: print("✅  Progress saved.")
+            if messages:
+                print(f"\n{ui.Style.YELLOW}--- DAILY REPORT ---{ui.Style.END}")
+                for msg in messages: print(f"   • {msg}")
             
             controls.wait_for_enter()
+            
         elif choice == controls.KEY_QUIT:
+            print("👋 See you on the court!")
             break
 
 if __name__ == "__main__":
