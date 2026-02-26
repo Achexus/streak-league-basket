@@ -1,0 +1,17 @@
+{
+    "name": "1",
+    "jersey_number": "1",
+    "position": "PG",
+    "city": "Istanbul",
+    "team_name": "Kadikoy Actual Ballers",
+    "stats": {
+        "SHOOTING": 50,
+        "DEFENSE": 50,
+        "PLAYMAKING": 50
+    },
+    "level": 1,
+    "xp": 0,
+    "streak": 0,
+    "last_login_date": "2026-02-26",
+    "daily_tasks": []
+}

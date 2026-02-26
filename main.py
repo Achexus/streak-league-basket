@@ -1,111 +1,148 @@
+import os
 import time
-import sys
-import random
-from datetime import datetime, date
+import json
 
-# --- MODÜLER İMPORTLAR ---
-from core import controls
-from models import Player
-from models.league import LeagueManager
-from systems import match_engine, loops  # loops eklendi
-import ui
+from ui.menus import draw_main_title_screen, draw_dashboard
+from ui.style import get_safe_input
+from models.player import Player, SAVE_FILE
+import setup_season # Otomatik kurulum için modülü içe aktardık
 
-def create_game():
-    ui.play_intro_animation()
-    ui.clear_screen()
-    ui.print_header()
-    
-    print("📂 Loading World Database...")
-    try:
-        lm = LeagueManager()
-    except FileNotFoundError:
-        print(f"\n{ui.Style.RED}❌ ERROR: Season data missing!{ui.Style.END}")
-        print(f"   Please run 'python setup_season.py' first.")
-        sys.exit()
-    
-    time.sleep(0.5)
-    ui.clear_screen()
-    ui.print_header()
+def load_season_data():
+    """Veritabanını okur, yoksa otomatik olarak oluşturur."""
+    db_path = "data/season_data.json"
+    if not os.path.exists(db_path):
+        print("\n      [SYSTEM] Initializing league databases for the first time... Please wait.")
+        setup_season.generate_database()
+        time.sleep(1)
+        
+    with open(db_path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-    name = ui.get_safe_input("   Name: ", str) or "Rookie"
-    number = ui.get_safe_input("   Jersey #: ", str) or "10"
-    pos = ui.select_position_view()
-    city_code = ui.select_city_view()
+def start_new_journey():
+    """Yeni kariyer oluşturur, şehir seçtirir ve takıma atar."""
+    print("\n      [SYSTEM] Initializing new career protocol...")
     
-    # Ligi Bul
-    target_league = lm.get_league(f"CITY_{city_code}")
-    if not target_league: target_league = lm.get_league("CITY_1")
+    name = input("      >> Enter your player name: ").strip() or "Rookie"
+    jersey = input("      >> Enter your jersey number (e.g., 23): ").strip() or "00"
+    
+    print("\n      [POSITIONS] 1: PG | 2: SG | 3: SF | 4: PF | 5: C")
+    pos_choice = get_safe_input("      >> Select your position (1-5): ", input_type=int, min_val=1, max_val=5)
+    pos_map = {1: "PG", 2: "SG", 3: "SF", 4: "PF", 5: "C"}
+    position = pos_map[pos_choice]
+    
+    # Veritabanını yükle (Yoksa burada otomatik yaratılacak)
+    season_data = load_season_data()
+    cities = list(season_data["city_leagues"].keys())
+    
+    print("\n      [CITY SELECTION] Choose your starting city:")
+    for i in range(0, len(cities), 4):
+        chunk = cities[i:i+4]
+        row_str = "      "
+        for j, c in enumerate(chunk):
+            idx = i + j + 1
+            row_str += f"[{idx:2}] {c:<12} "
+        print(row_str)
+        
+    city_choice = get_safe_input("\n      >> Enter city number (1-16): ", input_type=int, min_val=1, max_val=16)
+    selected_city = cities[city_choice - 1]
+    
+    # Seçilen şehrin Şehir Liginden (city_leagues) ilk takımı oyuncuya ata
+    assigned_team = season_data["city_leagues"][selected_city]["teams"][0]["name"]
+        
+    player = Player(name, jersey, position, selected_city, assigned_team)
+    player.save() 
+    
+    print(f"\n      [CONTRACT SIGNED] Welcome to {assigned_team}!")
+    time.sleep(2)
+    return player
 
-    print(f"\n⚙️  Scouting teams in {target_league.name}...")
-    time.sleep(1)
-    
-    # Oyuncu Oluştur
-    player = Player(name, number, pos)
-    player.team_obj = random.choice(target_league.teams)
-    player.league_id = target_league.id
-    
-    ui.clear_screen()
-    ui.print_header()
-    print(f"\n✍️  CONTRACT SIGNED WITH {ui.Style.BOLD}{player.team_obj.name}{ui.Style.END}")
-    time.sleep(1)
-    
-    # Hızlı Başlangıç İçin Hayalleri Otomatik Ata (İstersen input'a çevirebilirsin)
-    player.stats.set_dreams("MVP", "Champion", "Legend")
-    
-    return player, lm
+def boot_system():
+    if not os.path.exists("data"):
+        os.makedirs("data")
+        
+    # Başlangıçta veritabanını garantiye alalım
+    load_season_data()
 
-def main():
-    player, league_manager = create_game()
+    current_player = None
 
     while True:
-        # Oyuncunun ligini güncelle (Hafta ilerlemesi için önemli)
-        current_league = league_manager.get_league(player.league_id)
-        current_league.current_week = league_manager.current_week 
-
-        ui.main_menu_view(player, current_league)
-        choice = ui.get_safe_input("Select >> ", str).upper()
+        has_save = os.path.exists(SAVE_FILE)
+        draw_main_title_screen(has_save)
         
-        if choice == controls.MENU_MATCH:
-            match_engine.play_match(player, league_manager)
-            controls.wait_for_enter()
+        choice = get_safe_input("\n      >> SYSTEM INPUT: ", input_type=int, min_val=1, max_val=4)
+        
+        if choice == 1:
+            current_player = start_new_journey()
+            break 
             
-        elif choice == controls.MENU_HOME:
-            loops.home_cycle(player, current_league)
+        elif choice == 2:
+            if has_save:
+                print("\n      [SYSTEM] Loading saved data...")
+                current_player = Player.load() 
+                time.sleep(1)
+                print(f"      [SUCCESS] {current_player.name} logged in! Team: {current_player.team_name}")
+                time.sleep(2)
+                break 
+            else:
+                print("\n      [ERROR] No save file found! Please start a New Journey.")
+                time.sleep(1.5)
+                
+        elif choice == 3:
+            print("\n      [SYSTEM] Settings module is under construction...")
+            time.sleep(1.5)
             
-        elif choice == controls.MENU_EVENTS: 
-            loops.event_cycle(player)
-            
-        elif choice == controls.MENU_PROFILE:
-            ui.profile_view(player)
-            
-        elif choice == controls.MENU_LEAGUE:
-            while True:
-                ui.league_standings_view(current_league)
-                c = ui.get_safe_input(">> ", str).upper()
-                if c == controls.KEY_BACK: break
-                elif c == controls.KEY_PLAY:
-                    match_engine.play_match(player, league_manager)
-                    controls.wait_for_enter()
-
-        elif choice == controls.MENU_END_DAY:
-            print("\n💤 Sleeping & Recovering...")
+        elif choice == 4:
+            print("\n      [SYSTEM] Terminating session. Goodbye!")
             time.sleep(1)
-            score = player.tasks.reset_for_new_day()
-            messages = player.apply_daily_score(score)
+            exit()
             
-            print(f"\n📊 DAY RESULT: {score} XP Gained.")
-            try: print(f"📅 Date Advanced to: {player.get_date_str()}")
-            except: pass
+    run_game_loop(current_player)
+
+def run_game_loop(player):
+    while True:
+        draw_dashboard(player)
+        choice = get_safe_input("\n      >> WHAT WOULD YOU LIKE TO DO? (1-4): ", input_type=int, min_val=1, max_val=4)
+
+        if choice == 1:
+            print("\n      [CATEGORIES] 1: SHOOTING (Work) | 2: DEFENSE (Sports) | 3: PLAYMAKING (Mind)")
+            cat_choice = get_safe_input("      >> Select a category (1-3): ", input_type=int, min_val=1, max_val=3)
+            cat_map = {1: "SHOOTING", 2: "DEFENSE", 3: "PLAYMAKING"}
             
-            if messages:
-                print(f"\n{ui.Style.YELLOW}--- DAILY REPORT ---{ui.Style.END}")
-                for msg in messages: print(f"   • {msg}")
-            
-            controls.wait_for_enter()
-            
-        elif choice == controls.KEY_QUIT:
-            print("👋 See you on the court!")
-            break
+            task_name = input("      >> Task Name: ").strip()
+            if task_name:
+                player.daily_tasks.append({"name": task_name, "category": cat_map[cat_choice], "done": False})
+                player.save() 
+                print("      [SUCCESS] Task added!")
+                time.sleep(1)
+
+        elif choice == 2:
+            if not player.daily_tasks:
+                print("\n      [ERROR] Add a task first!")
+                time.sleep(1.5)
+                continue
+
+            task_idx = get_safe_input(f"\n      >> Which task did you complete? (1-{len(player.daily_tasks)}): ", input_type=int, min_val=1, max_val=len(player.daily_tasks))
+            selected_task = player.daily_tasks[task_idx - 1]
+
+            if not selected_task["done"]:
+                selected_task["done"] = True
+                cat = selected_task["category"]
+                player.stats[cat] += 1
+                player.save()
+                print(f"\n      [CONGRATS!] {cat} attribute increased by +1!")
+            else:
+                print("\n      [INFO] Already completed.")
+            time.sleep(1.5)
+
+        elif choice == 3:
+            print("\n      [SYSTEM] End Day mechanics under construction.")
+            time.sleep(1.5)
+
+        elif choice == 4:
+            player.save()
+            print("\n      [SYSTEM] Returning to Main Menu...")
+            time.sleep(1)
+            boot_system() 
 
 if __name__ == "__main__":
-    main()
+    boot_system()

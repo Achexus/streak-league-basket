@@ -1,96 +1,72 @@
-import random
-from datetime import date, timedelta
-from models.stats import StatsManager
-from models.tasks import TaskManager
-from systems.event_system import EventManager
+import json
+import os
+from datetime import date
+
+SAVE_FILE = "data/savegame.json"
 
 class Player:
-    def __init__(self, name, number, position):
+    def __init__(self, name, jersey_number, position, city, team_name):
         self.name = name
-        self.number = number
+        self.jersey_number = jersey_number
         self.position = position
         
-        self.team_obj = None 
-        self.league_id = None # Hangi ligde oynadığını bilmeli
+        # YENİ EKLENENLER: Şehir ve Takım
+        self.city = city
+        self.team_name = team_name
         
-        # Oyun 15 Eylül'de başlasın
-        self.current_date = date(date.today().year, 9, 15)
-        self.days_passed = 0
+        self.stats = {
+            "SHOOTING": 50,
+            "DEFENSE": 50,
+            "PLAYMAKING": 50
+        }
         
-        # Alt Sistemler
-        self.stats = StatsManager(position)
-        self.tasks = TaskManager()
-        self.events = EventManager() # Event sistemi
-        
-        # Kariyer İstatistikleri
-        self.games_played = 0
-        self.career_pts = 0
-        self.career_ast = 0
-        self.career_reb = 0
-        self.career_stl = 0
-        self.career_blk = 0
-        
-        # Gelişim
         self.level = 1
-        self.xp_pool = 0 
-        self.total_lifetime_xp = 0
-
-    def apply_daily_score(self, score):
-        """Günü bitirince XP ve Event durumunu günceller"""
-        messages = []
+        self.xp = 0
+        self.streak = 0
+        self.last_login_date = str(date.today())
+        self.daily_tasks = [] 
         
-        # XP Kazanımı
-        if score > 0:
-            self.xp_pool += score
-            self.total_lifetime_xp += score
-            new_level = 1 + (self.total_lifetime_xp // 1000)
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "jersey_number": self.jersey_number,
+            "position": self.position,
+            "city": self.city,
+            "team_name": self.team_name,
+            "stats": self.stats,
+            "level": self.level,
+            "xp": self.xp,
+            "streak": self.streak,
+            "last_login_date": self.last_login_date,
+            "daily_tasks": self.daily_tasks
+        }
+        
+    @classmethod
+    def from_dict(cls, data):
+        p = cls(
+            name=data["name"], 
+            jersey_number=data.get("jersey_number", "00"), 
+            position=data.get("position", "PG"),
+            city=data.get("city", "Unknown City"),
+            team_name=data.get("team_name", "Free Agent")
+        )
+        p.stats = data.get("stats", p.stats)
+        p.level = data.get("level", 1)
+        p.xp = data.get("xp", 0)
+        p.streak = data.get("streak", 0)
+        p.last_login_date = data.get("last_login_date", str(date.today()))
+        p.daily_tasks = data.get("daily_tasks", [])
+        return p
+
+    def save(self):
+        os.makedirs("data", exist_ok=True)
+        with open(SAVE_FILE, "w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f, indent=4)
             
-            if new_level > self.level:
-                messages.append(f"🎉 LEVEL UP! {self.level} -> {new_level}")
-                for key in self.stats.attributes:
-                    self.stats.upgrade_stat(key, 1)
-                self.level = new_level
-        
-        # Event Kontrolü
-        event_msg = self.events.daily_reset(score)
-        if event_msg:
-            messages.append(event_msg)
-            
-        self.events.check_for_new_event()
-        
-        # Tarihi İlerlet
-        self.current_date += timedelta(days=1)
-        self.days_passed += 1
-        
-        return messages
-
-    def get_match_bonus(self):
-        bonus = 0
-        if self.events.perfect_streak > 0:
-            bonus += self.events.perfect_streak * 2
-        return bonus
-
-    def update_match_stats(self, pts, ast, reb, stl, blk):
-        self.games_played += 1
-        self.career_pts += pts
-        self.career_ast += ast
-        self.career_reb += reb
-        self.career_stl += stl
-        self.career_blk += blk
-
-    def get_date_str(self):
-        return self.current_date.strftime("%d %B %Y")
-    
-    def check_agenda_alerts(self):
-        # O günkü takvim notlarını bul
-        return [i.content for i in self.tasks.agenda if i.event_date.date() == self.current_date]
-    
-    def import_agenda_to_task(self):
-        alerts = self.check_agenda_alerts()
-        count = 0
-        for note in alerts:
-            # Aynı notu tekrar ekleme
-            if not any(t.task == f"[AGENDA] {note}" for t in self.tasks.daily_tasks):
-                self.tasks.add_task(f"[AGENDA] {note}", 'M')
-                count += 1
-        return count
+    @staticmethod
+    def load():
+        if not os.path.exists(SAVE_FILE):
+            return None
+        with open(SAVE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return Player.from_dict(data)
